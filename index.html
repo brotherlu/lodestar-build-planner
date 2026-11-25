@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lodestar Build Planner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=IBM+Plex+Sans:wght@400;600;700&display=swap">
+<style>
+/* VOICE everyday hobby tool for a space RPG, precise and calm, never cute
+   IDEA a navigator's chart table: one night-sky band, ruled panels, five coloured constellations for the five skill trees
+   PICTURE the live character at the chosen level: five tree gauges with tier marks at 4, 8 and 12 points
+   COLOUR white ground, deep navy band, cyan for values, five tree hues (magenta, gold, orange, green, blue), amber for warnings
+   TYPE Chakra Petch (instrument-panel headings) + IBM Plex Sans
+   LAYOUT laptop: band, sample builds, creation | snapshot, level list | level editor, skill index; phone: one column in that order */
+:root{color-scheme:light dark;--bg:light-dark(#ffffff,#0c111b);--ink:light-dark(#121a2a,#e6ebf4);--mut:light-dark(#566176,#9ba6bb);--pan:light-dark(#f2f5fa,#151c2b);--line:light-dark(#d9e0ea,#283247);--band:#0f1a33;--onb:#eaf0fb;--ac:light-dark(#0b7391,#52c6e0);--acs:light-dark(#d6eff6,#11323d);--warn:light-dark(#f0b42a,#e3a91c);--bad:light-dark(#bf2430,#ff7d86);
+--t0:light-dark(#a3306b,#d65a98);--t1:light-dark(#9a6510,#d9a23a);--t2:light-dark(#bf4510,#f07a3c);--t3:light-dark(#22784d,#4fbf84);--t4:light-dark(#3152bf,#7b97f2)}
+*{box-sizing:border-box;min-width:0}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.5 "IBM Plex Sans",system-ui,sans-serif;overflow-x:clip}
+h1,h2,h3,.num{font-family:"Chakra Petch",ui-monospace,sans-serif;line-height:1.1}
+h1{font-size:clamp(34px,5vw,50px);font-weight:700;margin:0;text-wrap:balance;letter-spacing:.01em}
+h2{font-size:28px;font-weight:700;margin:0 0 4px}
+h3{font-size:20px;font-weight:700;margin:18px 0 8px}
+p{margin:0 0 10px}
+.wrap{max-width:1240px;margin:0 auto}
+.band{padding:clamp(24px,3.5vw,48px) max(5vw,16px)}
+.top{background:var(--band);color:var(--onb);background-image:radial-gradient(1.2px 1.2px at 12% 30%,#fff9 50%,transparent 51%),radial-gradient(1px 1px at 33% 70%,#fff7 50%,transparent 51%),radial-gradient(1.4px 1.4px at 58% 22%,#fffa 50%,transparent 51%),radial-gradient(1px 1px at 76% 64%,#fff6 50%,transparent 51%),radial-gradient(1.2px 1.2px at 91% 18%,#fff8 50%,transparent 51%),radial-gradient(1px 1px at 46% 88%,#fff5 50%,transparent 51%);border-bottom:4px solid var(--ac)}
+.top .wrap{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px 32px;align-items:end}
+.top p{margin:8px 0 0;max-width:62ch;opacity:.9}
+.kick{font-family:"Chakra Petch",sans-serif;font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:#8fdcf0;margin-bottom:6px}
+.ctl{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
+.ctl label{display:grid;gap:4px;font-size:14px;font-weight:600}
+input,select,button,textarea{font:inherit;font-size:16px;color:inherit}
+input[type=text],input[type=search],select,textarea{background:var(--bg);color:var(--ink);border:1.5px solid var(--line);border-radius:8px;padding:9px 10px;min-height:44px}
+.top input[type=text],.top select{border-color:transparent;background:#fff;color:#121a2a}
+button{min-height:44px;min-width:44px;padding:0 14px;border-radius:8px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer;font-weight:600}
+button:hover:not(:disabled){border-color:var(--ac)}
+button:active:not(:disabled){transform:translateY(1px)}
+button:disabled{opacity:.4;cursor:default}
+:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
+.top :focus-visible{outline-color:#8fdcf0}
+.mut{color:var(--mut);font-size:14px}
+.bad{color:var(--bad);font-weight:700}
+.flag{display:inline-block;background:var(--warn);color:#2a1d00;border-radius:4px;padding:0 6px;font-size:13px;font-weight:700}
+.pan{background:var(--pan);border:1px solid var(--line);border-radius:12px;padding:18px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0}
+.row label{display:grid;gap:4px;font-weight:600;font-size:14px;flex:1 1 240px}
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:10px 0}
+.toolbar input[type=search]{flex:1 1 220px}
+.ck{display:flex;gap:8px;align-items:center;min-height:44px;font-size:15px}
+.ck input{width:20px;height:20px;accent-color:var(--ac)}
+.scroll{overflow-x:auto}
+.note{font-size:14px;color:var(--mut);margin-top:8px}
+
+/* icons */
+.ic{width:20px;height:20px;flex:none;vertical-align:-4px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ic .f{fill:currentColor;stroke:none}
+.med{display:inline-grid;place-items:center;width:34px;height:34px;flex:none;border-radius:9px;background:var(--mc,var(--ac));color:#fff;box-shadow:inset 0 -3px 0 rgba(0,0,0,.2),inset 0 2px 0 rgba(255,255,255,.22);vertical-align:middle;transform:rotate(0)}
+.med .ic{width:21px;height:21px;vertical-align:0}
+.med.big{width:64px;height:64px;border-radius:16px}
+.med.big .ic{width:38px;height:38px;stroke-width:1.6}
+.med.sm{width:26px;height:26px;border-radius:7px}
+.med.sm .ic{width:16px;height:16px;stroke-width:2.1}
+.t0{--tc:var(--t0);--mc:#a3306b}.t1{--tc:var(--t1);--mc:#94600c}.t2{--tc:var(--t2);--mc:#bb440f}.t3{--tc:var(--t3);--mc:#22784d}.t4{--tc:var(--t4);--mc:#3152bf}
+.pips{display:inline-flex;gap:3px;vertical-align:middle}
+.pips i{width:9px;height:9px;border-radius:50%;border:1.5px solid var(--tc,var(--mut));display:block}
+.pips i.on{background:var(--tc,var(--ac))}
+.pips i.nx{background:var(--ac);border-color:var(--ac);box-shadow:0 0 0 2px var(--acs)}
+
+/* presets */
+.presets{padding-bottom:0}
+.pgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:12px}
+@media(max-width:860px){.pgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:540px){.pgrid{grid-template-columns:minmax(0,1fr)}}
+.pc{display:grid;grid-template-rows:auto auto 1fr auto;gap:8px;background:var(--pan);border:1px solid var(--line);border-radius:12px;padding:14px}
+.pc h3{margin:0;font-size:22px}
+.pc p{margin:0;font-size:15px}
+.pc .meta{font-size:13px;color:var(--mut)}
+.pc[aria-current=true]{border-color:var(--ac);box-shadow:inset 0 0 0 1px var(--ac)}
+
+/* creation */
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:28px;align-items:start}
+.bgs{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
+.bgb{display:grid;gap:4px;text-align:left;padding:8px 10px;font-weight:600;font-size:15px}
+.bgb span.ics{display:flex;gap:4px}
+.bgb[aria-pressed=true]{border-color:var(--ac);background:var(--acs)}
+.bgcard{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;align-items:center;margin-top:10px}
+.trait{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 10px;padding:8px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.trait:last-child{border-bottom:0}
+.trait input{width:22px;height:22px;margin:2px 0 0;accent-color:var(--ac);grid-row:span 2}
+.trait span{font-weight:700}
+.trait small{color:var(--mut);font-size:14px}
+.trait small b{color:var(--ink);font-weight:600}
+.trait.off{opacity:.45;cursor:default}
+
+/* snapshot */
+.snap{position:sticky;top:12px}
+.snaphead{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 16px}
+.snaphead h2{overflow-wrap:anywhere}
+.lvl{display:flex;align-items:center;gap:12px;flex:1 1 260px}
+.lvl .num{font-size:42px;font-weight:700;min-width:2.4ch;text-align:right}
+input[type=range]{flex:1;accent-color:var(--ac);height:44px}
+.gauges{display:grid;gap:8px;margin:10px 0}
+.gauge{display:grid;grid-template-columns:7.4em minmax(0,1fr) 2.2em;gap:10px;align-items:center}
+.gauge>span:first-child{font-weight:700;display:flex;align-items:center;gap:8px;font-size:15px}
+.gauge .t{position:relative;height:18px;background:var(--bg);border:1px solid var(--line);border-radius:5px;overflow:hidden}
+.gauge .t i{position:absolute;inset:0 auto 0 0;background:var(--tc);transition:width .35s ease}
+.gauge .t b{position:absolute;top:0;bottom:0;width:2px;background:var(--ink);opacity:.35}
+.gauge .n{text-align:right;font-family:"Chakra Petch",sans-serif;font-size:20px;font-weight:700}
+.gauge small{grid-column:2/-1;margin-top:-6px;font-size:13px;color:var(--mut)}
+.figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(7.5em,1fr));gap:8px;margin:14px 0}
+.fig{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.fig .num{font-size:28px;font-weight:700;white-space:nowrap}
+.fig small{display:block;font-size:13px;color:var(--mut)}
+.learned{display:flex;flex-wrap:wrap;gap:6px}
+.learned>span{display:inline-flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:3px 8px 3px 3px;font-size:14px}
+.chal{margin:6px 0 0;padding:0;list-style:none;display:grid;gap:6px}
+.chal li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:center;font-size:14px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 8px}
+
+/* level plan */
+.plan{display:grid;grid-template-columns:minmax(230px,.7fr) minmax(0,1.3fr);gap:28px;align-items:start}
+.edhead{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:8px}
+.edhead .num{font-size:38px;font-weight:700}
+.levels{display:grid;gap:4px;max-height:760px;overflow-y:auto;padding-right:4px}
+.lrow{display:grid;grid-template-columns:2.6em minmax(0,1fr) auto;gap:10px;align-items:center;text-align:left;font-weight:400;padding:5px 10px}
+.lrow .num{font-size:22px;font-weight:700}
+.lrow[aria-current=true]{border-color:var(--ac);background:var(--acs)}
+.lrow .pk{display:flex;align-items:center;gap:8px;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lrow .pk>span:last-child{overflow:hidden;text-overflow:ellipsis}
+.lrow .st{font-size:13px;white-space:nowrap}
+.lrow.one{cursor:default}
+.ok{color:var(--ac);font-weight:700}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 4px}
+.tab{display:inline-flex;align-items:center;gap:8px;padding:0 12px 0 6px}
+.tab[aria-pressed=true]{background:var(--tc);border-color:var(--tc);color:#fff}
+.tab[aria-pressed=true] .med{background:rgba(255,255,255,.18);box-shadow:none}
+.tier{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;align-items:baseline;margin:14px 0 6px;border-bottom:2px solid var(--line);padding-bottom:3px}
+.tier strong{font-family:"Chakra Petch",sans-serif;font-size:17px}
+.skg{display:grid;grid-template-columns:repeat(auto-fill,minmax(178px,1fr));gap:6px}
+.sk{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 10px;align-items:center;text-align:left;padding:6px 8px;font-weight:600;font-size:14.5px;line-height:1.25}
+.sk .med{grid-row:span 2}
+.sk[aria-pressed=true]{border-color:var(--ac);background:var(--acs);box-shadow:inset 0 0 0 1px var(--ac)}
+.pcard{display:grid;grid-template-columns:auto minmax(0,1fr);gap:14px;align-items:start;background:var(--pan);border:1px solid var(--line);border-radius:12px;padding:14px;margin-top:10px}
+.pcard p{margin:0 0 4px}
+.pcard .req{font-size:14px;background:var(--bg);border-left:4px solid var(--warn);padding:6px 10px;border-radius:0 6px 6px 0;margin-top:6px}
+.why{font-size:14px;margin:6px 0 0}
+details{margin-top:12px}
+summary{cursor:pointer;font-weight:600;min-height:44px;display:flex;align-items:center}
+textarea{width:100%;min-height:90px;font-family:ui-monospace,monospace;font-size:14px}
+
+/* index */
+.idx{border-collapse:collapse;width:100%}
+.idx th,.idx td{text-align:left;padding:8px;border-bottom:1px solid var(--line);vertical-align:top}
+.idx th{font-size:13px;color:var(--mut)}
+.idx .pnw{display:flex;align-items:center;gap:10px;font-weight:700}
+.idx ol{margin:0;padding-left:1.3em;font-size:14px}
+.idx td.tt{font-size:14px;white-space:nowrap}
+.idx tr.have .pnw{color:var(--ac)}
+
+.foot{background:var(--pan);border-top:1px solid var(--line)}
+.foot .wrap{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;font-size:15px}
+.foot ul{margin:0;padding-left:18px}
+@media(max-width:920px){.grid2,.plan{grid-template-columns:minmax(0,1fr)}.snap{position:static}.levels{max-height:340px}}
+@media(max-width:620px){.top .wrap{grid-template-columns:minmax(0,1fr)}.gauge{grid-template-columns:6.6em minmax(0,1fr) 2em}.idx thead{display:none}.idx tr{display:grid;grid-template-columns:minmax(0,1fr) auto;padding:8px 0;border-bottom:1px solid var(--line)}.idx td{border:0;padding:3px 6px}.idx td:nth-child(3),.idx td:nth-child(4){grid-column:1/-1}.skg{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}}
+@media(prefers-reduced-motion:reduce){.gauge .t i{transition:none}}
+</style>
+</head>
+<body>
+<header class="band top">
+ <div class="wrap">
+  <div>
+   <div class="kick">Fan-made planner for Starfield</div>
+   <h1>Lodestar Build Planner</h1>
+   <p>Pick a background and traits, then plan one skill point per level. It checks tier unlocks for you and reminds you which challenge each rank needs.</p>
+  </div>
+  <div class="ctl">
+   <label>Build name<input type="text" id="bname" maxlength="60"></label>
+   <label>Plan to level<select id="cap"></select></label>
+  </div>
+ </div>
+</header>
+
+<section class="band presets">
+ <div class="wrap">
+  <h2>Sample builds</h2>
+  <p class="mut">Six complete plans to level 40. Load one as a starting point; Undo brings back what you had.</p>
+  <div class="pgrid" id="presets"></div>
+ </div>
+</section>
+
+<section class="band">
+ <div class="wrap grid2">
+  <div>
+   <h2 id="creation">Background</h2>
+   <p class="mut">Your background gives three skills at rank 1 before level 2.</p>
+   <div class="bgs" id="bgs"></div>
+   <div id="bgcard"></div>
+   <h3>Traits <span class="mut" id="tcount"></span></h3>
+   <p class="mut">Up to three. Each has an upside and a downside, and a few rule each other out.</p>
+   <div class="pan" style="padding:6px 14px" id="traits"></div>
+  </div>
+  <aside class="pan snap" aria-label="Character at chosen level">
+   <div class="snaphead">
+    <h2 id="snapname">Snapshot</h2>
+    <div class="lvl"><span class="mut">Level</span><input type="range" id="view" min="1" max="40" aria-label="Show character at level"><span class="num" id="viewn">1</span></div>
+   </div>
+   <div class="gauges" id="gauges"></div>
+   <div class="figs" id="figs"></div>
+   <div class="learned" id="learned"></div>
+   <h3 style="font-size:17px">Challenges to work on next</h3>
+   <ul class="chal" id="chal"></ul>
+   <p class="note">Marks on each gauge sit at 4, 8 and 12 points, where Advanced, Expert and Master open.</p>
+  </aside>
+ </div>
+</section>
+
+<section class="band" style="background:var(--pan);border-block:1px solid var(--line)">
+ <div class="wrap">
+  <div class="edhead"><h2>Level by level</h2>
+   <div class="toolbar"><button id="undo">Undo</button><button id="copy">Copy build code</button><button id="reset">Start blank</button></div>
+  </div>
+  <p class="mut">One skill point per level. Spend it on a new skill at rank 1, or on the next rank of one you have once its challenge is done.</p>
+  <div class="plan">
+   <div class="levels" id="levels" role="list"></div>
+   <div class="pan" id="editor" style="background:var(--bg)"></div>
+  </div>
+  <details id="io"><summary>Build code</summary>
+   <textarea id="code" aria-label="Build code" placeholder="Paste a build code here, then press Load build"></textarea>
+   <div class="row"><button id="load">Load build</button><span id="iomsg" class="mut" aria-live="polite"></span></div>
+  </details>
+ </div>
+</section>
+
+<section class="band">
+ <div class="wrap">
+  <h2>All skills</h2>
+  <div class="toolbar">
+   <input type="search" id="q" placeholder="Search skills, effects or challenges" aria-label="Search skills">
+   <select id="tf" aria-label="Skill tree"><option value="">All trees</option></select>
+   <label class="ck"><input type="checkbox" id="mine"> Only skills in this plan</label>
+  </div>
+  <div class="scroll"><table class="idx"><thead><tr><th>Skill</th><th>Tree and tier</th><th>Ranks</th><th>Challenges for ranks 2 to 4</th></tr></thead><tbody id="idx"></tbody></table></div>
+ </div>
+</section>
+
+<footer class="band foot">
+ <div class="wrap">
+  <div><h3>How it works</h3><ul>
+   <li>Your background gives three skills at rank 1. Every level after that gives one skill point.</li>
+   <li>Each tree has four tiers. Advanced opens at 4 points spent in that tree, Expert at 8, Master at 12. Background skills count.</li>
+   <li>Rank 1 of a skill only needs its tier open. Ranks 2 to 4 also need that skill's challenge done first.</li>
+  </ul></div>
+  <div><h3>What it assumes</h3><ul>
+   <li>Challenges can't be predicted, so the plan assumes you finish each one before the level you planned the rank. The list under the snapshot shows what to chase.</li>
+   <li>Traits are only those from character creation. Some can be removed later in the game; that isn't modelled.</li>
+   <li>Effects are short summaries. Exact numbers can change with game updates.</li>
+  </ul></div>
+  <div><h3>Sources</h3><p class="mut">Skill, challenge, background and trait data compiled from community guides (The Nerd Stash, Fextralife wiki, Gameranx). Fan-made and not affiliated with Bethesda. Icons are original. Your plan is saved in this browser only; copy the build code to keep it elsewhere.</p></div>
+ </div>
+</footer>
+<script>
+const G={
+box:'<path d="M6 11V7a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v6a5 5 0 0 1-5 5h-2a5 5 0 0 1-5-5z"/><path d="M6 11h5a2 2 0 0 1 0 4H9M7 18v3h9v-3"/>',
+fit:'<path d="M12 3v7.5M12 10.5c-1.6 0-2.6 1-2.6 1M12 10.5c1.6 0 2.6 1 2.6 1"/><path d="M9.4 7C6.4 7 4 11 4 16c0 3 2 4 4 3 1-.5 1.4-2 1.4-4zM14.6 7c3 0 5.4 4 5.4 9 0 3-2 4-4 3-1-.5-1.4-2-1.4-4z"/>',
+ste:'<path d="M2.5 11s3.6-5 9.5-5 9.5 5 9.5 5"/><path d="M4.5 13.5c2.1 1.6 4.6 2.6 7.5 2.6s5.4-1 7.5-2.6M8 16.2L7 19M12 17v3M16 16.2l1 2.8"/>',
+wtl:'<path d="M9 9V7a3 3 0 0 1 6 0v2"/><path d="M7.5 9h9l1 2.5a6.5 6.5 0 1 1-11 0z"/>',
+wel:'<path d="M12 20s-8-4.6-8-10.5A4.5 4.5 0 0 1 12 6a4.5 4.5 0 0 1 8 3.5C20 15.4 12 20 12 20z"/><path d="M12 9.5v5M9.5 12h5"/>',
+ewd:'<path d="M12 2.5l8 3v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10v-6z"/><path class="f" d="M13 6l-4.5 7H12l-1 5 4.5-7H12z"/>',
+env:'<path d="M10 14.5V5a2 2 0 0 1 4 0v9.5a4 4 0 1 1-4 0z"/><circle cx="12" cy="17.5" r="1.6" class="f"/><path d="M17.5 6h3M17.5 9.5h3M17.5 13h2"/>',
+gym:'<path d="M4 20A10 10 0 0 1 16 7.5" stroke-dasharray="2 2.6"/><circle cx="19" cy="5.5" r="2"/><path d="M14 21l2.5-5 3.5 2"/>',
+nut:'<path d="M12 7.5c-2-1.5-7-1-7 5 0 5 3 8.5 5 8.5 1 0 1.3-.5 2-.5s1 .5 2 .5c2 0 5-3.5 5-8.5 0-6-5-6.5-7-5z"/><path d="M12 7.5c0-2 1-4 3.5-4.5"/>',
+pai:'<path d="M12 2.5l8 3v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10v-6z"/><path d="M12.5 6l-2.5 4 3 2-2 5"/>',
+cel:'<path d="M7 3c0 5 10 4.5 10 9s-10 4-10 9M17 3c0 5-10 4.5-10 9s10 4 10 9"/><path d="M9 6.3h6M9 17.7h6M8.3 12h7.4"/>',
+dec:'<path d="M12 3s6.5 6.5 6.5 11a6.5 6.5 0 0 1-13 0C5.5 9.5 12 3 12 3z"/><path d="M9.5 16.5l5-5M9.5 11.5l5 5"/>',
+mar:'<path d="M3 15l9-9a2.1 2.1 0 0 1 3 3l-2 2 4.5-2a2 2 0 0 1 1.8 3.5L12 18.5A5.5 5.5 0 0 1 5 17z"/><path d="M15 3.5l2-1.5M18 6l2.5-.5M17 4.5l2.5-2"/>',
+con:'<path d="M12 3c-5 0-7 5-7 9v8.5h14V12c0-4-2-9-7-9z"/><path d="M8.5 20.5v-6a3.5 3.5 0 0 1 7 0v6"/>',
+neu:'<circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/>',
+rej:'<path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M18.2 2.5v4.2H14"/><path class="f" d="M12 16s-3.6-2.1-3.6-4.5A1.9 1.9 0 0 1 12 10.3a1.9 1.9 0 0 1 3.6 1.2C15.6 13.9 12 16 12 16z"/>',
+com:'<ellipse cx="9" cy="7" rx="6" ry="2.5"/><path d="M3 7v4c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5V7"/><path d="M9 13.5v3c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5v-4c0-1.4-2.7-2.5-6-2.5"/>',
+gas:'<path d="M4 10h16v6a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z"/><path d="M2 10h20M9 7c0-1.5 1-1.5 1-3.2M14 7c0-1.5 1-1.5 1-3.2"/>',
+per:'<path d="M4 4.5h16v10.5H10l-5 4v-4H4z"/><path d="M8.5 9.8l2.5 2.5 4.5-4.5"/>',
+sca:'<path d="M3 10h18v10H3z"/><path d="M3 10l3-5h12l3 5M9.5 14h5"/>',
+the:'<path d="M8 21v-4.5l-3.5-4a1.6 1.6 0 0 1 2.3-2.2L9 12V5a1.5 1.5 0 0 1 3 0v5V4a1.5 1.5 0 0 1 3 0v6V5.5a1.5 1.5 0 0 1 3 0V15c0 3.3-2 6-5 6z"/>',
+dce:'<path d="M4 4h16v7a8 8 0 0 1-16 0z"/><path d="M12 4v15"/><circle cx="8" cy="10" r="1.4" class="f"/><path d="M14.5 10.2h3M14.5 14.5c1 .8 2 .8 3 0"/>',
+dip:'<path d="M5 20C9 14 13 9 20 4"/><path d="M9 14.2c-3 0-4-2-4-2s1.5-1.5 4 0M12 10.6c-1-3 .5-4.6.5-4.6s2 1 1.5 3.6M14.4 9c3 .4 4 2.4 4 2.4s-2 1-4-1M17 6.4c-.5-2.4 1-3.4 1-3.4"/>',
+inm:'<path d="M12 2l2.4 4.6 5.1-1.3-1.9 5 3.9 2.8-4.8 1.5.4 5.2-5.1-2.8-5.1 2.8.4-5.2-4.8-1.5 3.9-2.8-1.9-5 5.1 1.3z"/><path d="M12 8.3v4.2M12 15v.3"/>',
+iso:'<circle cx="12" cy="12" r="9.5" stroke-dasharray="2.4 2.6"/><circle cx="12" cy="9.3" r="2.5"/><path d="M7.7 17a4.3 4.3 0 0 1 8.6 0"/>',
+neg:'<rect x="3" y="8" width="18" height="11" rx="2"/><circle cx="12" cy="13.5" r="2.5"/><path d="M7 4.5h10M15 2.8l2 1.7-2 1.7"/>',
+ins:'<path d="M4 20L19 5M14 5h5v5M20 20L5 5M5 10V5h5"/>',
+lea:'<path d="M4 10l8-5 8 5M4 15l8-5 8 5M4 20l8-5 8 5"/>',
+opm:'<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V2.5h6V4M8.5 10h7M8.5 14h7M8.5 18h4"/>',
+man:'<path d="M4 3.5h16M7 3.5v7M12 3.5v4.5M17 3.5v7"/><circle cx="12" cy="10.5" r="2.5"/><path d="M7 10.5l3 3M17 10.5l-3 3M12 13v4.5L9 21M12 17.5l3 3.5"/>',
+shc:'<path d="M3 12c0-4 4-7 9-7s9 3 9 7z"/><path d="M3 12h18l-2 4H5z"/><path class="f" d="M12 6.8l.9 1.8 2 .3-1.5 1.4.4 2-1.8-1-1.8 1 .4-2-1.5-1.4 2-.3z"/>',
+xen:'<path d="M12 3c-5 0-8 3.5-8 7.5C4 15 8 21 12 21s8-6 8-10.5C20 6.5 17 3 12 3z"/><path class="f" d="M6.5 11c1.6-.6 3.6.4 4.1 2.6-2 .5-3.6-.5-4.1-2.6zM17.5 11c-1.6-.6-3.6.4-4.1 2.6 2 .5 3.6-.5 4.1-2.6z"/>',
+bal:'<path d="M9 21V10c0-4 3-7 3-7s3 3 3 7v11z"/><path d="M9 17h6"/>',
+due:'<path d="M20.5 3.5l-1.5 5-9.5 9.5L6 14.5 15.5 5z"/><path d="M4 12.5l7.5 7.5M3 21l3.2-3.2"/>',
+las:'<rect x="2" y="9" width="6" height="6" rx="1"/><path d="M8 12h13"/><path d="M11.5 9h8M11.5 15h8" stroke-dasharray="1.5 2.2"/>',
+pis:'<path d="M3 7h17v4h-9l-1.2 2.3H8L6.5 20H3l1.5-7L3 11z"/><path d="M19 7V5.5M10.5 11v2"/>',
+sho:'<rect x="5" y="9" width="5" height="12" rx="1"/><rect x="14" y="9" width="5" height="12" rx="1"/><path d="M5 17h5M14 17h5M6 9V5.5a1.5 1.5 0 0 1 3 0V9M15 9V5.5a1.5 1.5 0 0 1 3 0V9"/>',
+dem:'<circle cx="11" cy="14.5" r="6.5"/><path d="M9 8.2V5.5h4v2.7M13 5.5c2 0 4-1 4-3.3M17.5 6.5l2.8-1"/>',
+hvy:'<path d="M2.5 9.5h15l4 2.5-4 2.5h-15z"/><path d="M7 14.5V19M12 14.5v3M2.5 7.5v9"/>',
+inc:'<path d="M2 14c2-5 4-5 5 0s3 5 5 0 3-5 5 0 3 5 5 0"/><path class="f" d="M14 1.5l-3.5 5.2h2.6l-1 3.5 3.6-5.2H13z"/>',
+pbm:'<circle cx="5" cy="12" r="3"/><circle cx="5" cy="12" r="1" class="f"/><path d="M8.5 12h1.5M12 12h2.5M16.5 12h2.5M21 12h1"/><path d="M8.5 8.5L21 6M8.5 15.5L21 18"/>',
+rif:'<path d="M2 10.5h16l2-2h2v3.5l-3 1H12.5l-1 2-3 4H5.5l2.5-4V13H3z"/><path d="M13.5 8.5V7h3.5"/>',
+mrk:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5.5"/><circle cx="12" cy="12" r="2" class="f"/>',
+rld:'<path d="M6 3h6l2 18H8z"/><path d="M6.6 8h5.9M7.2 13h5.8"/><path d="M18 5.5a6 6 0 0 1 1 8"/><path d="M16.8 13.8l2.2-.2.3 2.2"/>',
+snp:'<circle cx="12" cy="12" r="9"/><path d="M12 3v6M12 15v6M3 12h6M15 12h6"/><circle cx="12" cy="12" r=".9" class="f"/>',
+tgt:'<path d="M3 8V3h5M16 3h5v5M21 16v5h-5M8 21H3v-5"/><circle cx="12" cy="12" r="3.5"/><path d="M12 6.5v2M12 15.5v2M6.5 12h2M15.5 12h2"/>',
+arp:'<path d="M14 3v18" stroke-width="3.4"/><path d="M2 12h18M16.5 8.5L20.5 12l-4 3.5M2 9.5L4 12l-2 2.5"/>',
+cri:'<path d="M4.5 3.3a2 2 0 0 1 3.2 1L10.5 9l-2.2 2.4L5.6 7a2 2 0 0 1-1.1-3.7zM13.5 12.6l2.8 4.6a2 2 0 0 1 1.1 3.7 2 2 0 0 1-3.2-1L11.4 15z"/><path d="M8.4 11.5l1.6 1.2 1-2.6 1.6 2.3"/>',
+shp:'<circle cx="12" cy="12" r="8"/><path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4"/><path class="f" d="M12 8.2l1.1 2.4 2.6.3-1.9 1.8.5 2.6L12 14l-2.3 1.3.5-2.6-1.9-1.8 2.6-.3z"/>',
+ast:'<circle cx="12" cy="12" r="3.5"/><ellipse cx="12" cy="12" rx="10" ry="4.5" transform="rotate(-25 12 12)"/><circle cx="19.6" cy="7.6" r="1.5" class="f"/>',
+geo:'<path d="M12 2l5 6-5 14-5-14z"/><path d="M7 8h10M12 2v20"/>',
+med:'<rect x="3" y="6.5" width="18" height="14" rx="2"/><path d="M9 6.5V4h6v2.5M12 10.5v6M9 13.5h6"/>',
+res:'<path d="M9 3h6M10 3v6l-5.5 9.5A1.7 1.7 0 0 0 6 21h12a1.7 1.7 0 0 0 1.5-2.5L14 9V3"/><path d="M7.5 15h9"/><circle cx="11" cy="17.8" r="1" class="f"/><circle cx="14.2" cy="17.2" r=".8" class="f"/>',
+sur:'<rect x="7" y="2.5" width="10" height="11" rx="2"/><path d="M10 13.5V21h4v-7.5M9.8 6h4.4M9.8 9h2.6"/><path d="M19.5 5a5 5 0 0 1 0 5"/>',
+bot:'<path d="M12 21v-9"/><path d="M12 12C12 7 8 5 4 5c0 4 3 7 8 7zM12 14.5c0-4 3-6 7-6 0 4-3 6-7 6z"/>',
+scn:'<circle cx="9" cy="15" r="6"/><path d="M4 13.5c3 1 7 1 10 0"/><path d="M14.5 6a5 5 0 0 1 3.5 3.5M14.5 2.5a8.5 8.5 0 0 1 7 7"/>',
+ssd:'<path d="M4 13a8 8 0 0 1 16 0v4a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3z"/><path d="M7 12.6a5 3.2 0 0 1 10 0V15H7z"/>',
+wen:'<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="7"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2.1 2.1M16.9 16.9L19 19M5 19l2.1-2.1M16.9 7.1L19 5"/>',
+zoo:'<ellipse cx="12" cy="16" rx="4.5" ry="3.8"/><circle cx="5.8" cy="10" r="1.8"/><circle cx="9.8" cy="6.3" r="1.8"/><circle cx="14.2" cy="6.3" r="1.8"/><circle cx="18.2" cy="10" r="1.8"/>',
+aph:'<path d="M3 13l12-6 2 4-12 6z"/><path d="M15 7l3-1.5 2 4-3 1.5M10 14.8L8 21M10 14.8l4 6.2"/>',
+che:'<path d="M8.5 19.5a4 4 0 0 1-5.7-5.7l9-9a4 4 0 0 1 5.7 5.7z"/><path d="M9.2 9.2l5.6 5.6"/>',
+ope:'<path d="M2.5 19.5h19M5 19.5a7 7 0 0 1 14 0"/><path d="M9.5 19.5v-3h5v3M12 5v7.5M10 7h4"/>',
+anf:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.6" class="f"/><path d="M12 3v4M12 17v4M4.2 7.5l3.5 2M16.3 14.5l3.5 2M4.2 16.5l3.5-2M16.3 9.5l3.5-2"/>',
+pla:'<path d="M2 21a10 6.5 0 0 1 20 0"/><path d="M7 16.5v-5l5-4 5 4v5M10.5 16.5v-3h3v3"/>',
+spp:'<path d="M6 4h12l4 5-10 12L2 9z"/><path d="M2 9h20M9 4l3 5 3-5M12 9v12"/>',
+bws:'<rect x="3" y="12" width="9" height="7.5" rx="1.5"/><path d="M8 12V6.5M8 9.5h13M8 6.5h13"/>',
+bpt:'<rect x="5.5" y="3" width="5.5" height="12" rx="2"/><rect x="13" y="3" width="5.5" height="12" rx="2"/><path d="M8.2 17.5l-1 3.8M15.8 17.5l1 3.8M8.2 17.5l1 2.3M15.8 17.5l-1 2.3"/>',
+pil:'<path d="M5 20.5h14l-1.5-4h-11z"/><path d="M12 16.5V8.5"/><rect x="9.5" y="2.5" width="5" height="6" rx="2.5"/>',
+sec:'<circle cx="12" cy="12" r="8" stroke-dasharray="4.2 2.4"/><circle cx="12" cy="12" r="2.2" class="f"/><path d="M13.5 13.5l7 7"/>',
+tcs:'<path d="M3 7V3h4M17 3h4v4M21 17v4h-4M7 21H3v-4"/><path d="M12 6.5l3.5 9.5-3.5-2.3L8.5 16z"/>',
+ews:'<rect x="3" y="7" width="16" height="10" rx="2"/><path d="M19 10.5h2v3h-2"/><path class="f" d="M12 8.5l-4 4.6h3l-1 3 4-4.6h-3z"/>',
+eng:'<path d="M8 3h8v6l3 6.5H5L8 9z"/><path d="M9 18.5l-1 3M12 18.5V22M15 18.5l1 3"/>',
+pay:'<rect x="2.5" y="7" width="19" height="12" rx="1"/><path d="M6.5 7v12M10.5 7v12M14.5 7v12M18 7v12M7 7l5-4 5 4"/>',
+shs:'<path d="M12 2.5l8.5 5v9L12 21.5l-8.5-5v-9z"/><path d="M12 7.5l4 2.3v4.6l-4 2.3-4-2.3V9.8z"/>',
+mws:'<path d="M3.5 20.5l3-3M14 4h6v6l-9 9-6-6z"/><path d="M8 12l-3 1-2 3 3-.5M12 16l-1 3-3 2 .5-3M15 7.5l1.5 1.5"/>',
+pws:'<circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="9.5" stroke-dasharray="1 3.2"/><circle cx="12" cy="12" r="1.6" class="f"/>',
+rob:'<rect x="5" y="7" width="14" height="11" rx="3"/><path d="M12 7V3.5M3 11v4M21 11v4M9.5 15h5"/><circle cx="9.5" cy="11.5" r="1.4" class="f"/><circle cx="14.5" cy="11.5" r="1.4" class="f"/>',
+sds:'<path d="M3 3h18v18H3z" stroke-dasharray="2 2"/><path d="M12 6l4 11-4-2.5L8 17z"/>',
+aws:'<path d="M4 20.5h16M7 20.5v-4a5 5 0 0 1 10 0v4"/><path d="M11 12.5l8-7M13.5 14l7.5-6.5"/>',
+bat:'<path d="M7 3h4.5v9l1.5 3v3H5v-3l2-3z"/><path d="M2 21.5h20M16 13.5l4-2M16.5 17.5h4.5M15.5 9.5l2.5-3"/>',
+ems:'<path d="M6 3v9a6 6 0 0 0 12 0V3h-4v9a2 2 0 0 1-4 0V3z"/><path d="M6 7h4M14 7h4"/><path d="M3 15l-1 1.5M21 15l1 1.5M12 21.5V23"/>',
+sen:'<path d="M14.5 3.5a4.5 4.5 0 0 0-5 6L3.5 15.5a2.1 2.1 0 0 0 3 3l6-6a4.5 4.5 0 0 0 6-5l-2.8 2.8-2.7-.5-.5-2.7z"/>'};
+const TREES=['Physical','Social','Combat','Science','Tech'];
+const TIERS=['Novice','Advanced','Expert','Master'];const NEED=[0,4,8,12];
+const RAW=`box|Boxing|0|0|Kill {} enemies with unarmed attacks|20/50/100|+25% unarmed damage; power attacks use 25% less oxygen;+50% unarmed damage; power attacks use 50% less oxygen;+75% unarmed damage; power attacks use 75% less oxygen;+100% unarmed damage; unarmed attacks can knock enemies down
+fit|Fitness|0|0|Fully deplete your oxygen {} times|20/50/100|+10% oxygen;+20% oxygen;+30% oxygen;Sprinting and power attacks use much less oxygen
+ste|Stealth|0|0|Make {} sneak attacks|10/20/40|25% harder to detect; +5% suppressed sneak attack damage;50% harder to detect; +15% suppressed sneak damage;75% harder to detect; +15% suppressed sneak damage;100% harder to detect; +20% suppressed sneak damage; doors don't alert enemies while sneaking
+wtl|Weight Lifting|0|0|Sprint {} m while carrying 75% or more of your capacity|1,000/2,500/5,000|+10 kg carry capacity;+25 kg carry capacity;+50 kg carry capacity;+100 kg carry capacity; 50% less likely to stagger
+wel|Wellness|0|0|Heal {} damage|200/500/1,000|+10% maximum health;+20% maximum health;+30% maximum health;+40% maximum health
+ewd|Energy Weapon Dissipation|0|1|Take {} energy damage|150/350/750|5% less energy damage taken;10% less energy damage taken;15% less energy damage taken;25% chance to reflect energy damage while below 50% health
+env|Environmental Conditioning|0|1|Take {} environmental damage|100/250/500|+10 airborne resistance;+10 thermal resistance;+10 corrosive and radiation resistance;Fewer chances of afflictions from the environment
+gym|Gymnastics|0|1|Take 100 fall damage~Kill 5 enemies in zero gravity~Kill 20 enemies in zero gravity||Sprint then crouch to slide; 15% less fall damage;Move faster in zero gravity; 20% less fall damage;More stable in zero gravity; 30% less fall damage; regain oxygen after mantling;Jump higher; move faster after sliding or mantling
+nut|Nutrition|0|1|Eat or drink {} items|10/30/75|Food and drink are 10% more effective;20% more effective;30% more effective;50% more effective
+pai|Pain Tolerance|0|1|Take {} physical damage|250/500/1,000|5% less physical damage taken;10% less physical damage taken;15% less physical damage taken;5% chance to ignore physical damage while health is low
+cel|Cellular Regeneration|0|2|Recover from {} injuries|5/15/30|Injuries heal on their own slightly faster;Injuries heal moderately faster;Injuries heal noticeably faster;20% chance to avoid an injury
+dec|Decontamination|0|2|Recover from {} infections|5/15/30|Infections clear on their own slightly faster;Infections clear moderately faster;Infections clear noticeably faster;20% chance to avoid an infection
+mar|Martial Arts|0|2|Deal 250 unarmed damage~Disarm 10 enemies~Disarm 30 enemies||+15% melee and unarmed critical chance;15% chance to disarm with a melee or unarmed power attack;10% less damage taken while unarmed or holding a melee weapon;Blocking a melee or unarmed attack reflects 50% of its damage
+con|Concealment|0|3|Make {} melee or unarmed sneak attacks|10/30/75|Enemy mines don't trigger; sneak attacks deal 2.5x ranged, 4x melee;Running while sneaking stays quiet; sneak attacks 3x ranged, 5x melee;Stay still while sneaking to fade from view; 3.5x ranged, 8x melee;Distant enemies lose track of you; 4x ranged, 10x melee
+neu|Neurostrikes|0|3|Stun {} enemies with unarmed attacks|10/30/75|10% chance for unarmed attacks to stun;Unarmed attacks add EM damage;20% chance to stun;Stunning an enemy also knocks down those nearby
+rej|Rejuvenation|0|3|Drop below 25% health and recover to full {} times|3/8/15|Slowly regenerate health out of combat;Regenerate faster out of combat;Regenerate much faster out of combat and slowly in combat;Regenerate fastest out of combat and quickly in combat
+com|Commerce|1|0|Buy or sell {} unique items|25/75/150|Buy 5% cheaper, sell 10% higher;Buy 10% cheaper, sell 15% higher;Buy 15% cheaper, sell 20% higher;Buy 20% cheaper, sell 25% higher
+gas|Gastronomy|1|0|Cook {} food or drink items|5/25/50|Specialty food and drink recipes at the Research Lab;Gourmet recipes;Delicacy recipes;Exotic recipes; cooking occasionally costs nothing
+per|Persuasion|1|0|Win {} persuasion challenges|5/25/50|+10% persuasion success;+20% persuasion success;+30% persuasion success;+50% persuasion success
+sca|Scavenging|1|0|Loot {} containers|25/75/150|Containers sometimes hold extra credits;Containers sometimes hold extra ammo;Containers sometimes hold extra aid items;Tracked resources light up on your hand scanner
+the|Theft|1|0|Pickpocket {} times|5/10/20|You can pickpocket;+10% pickpocket chance;+30% pickpocket chance;+50% pickpocket chance; you can lift holstered weapons
+dce|Deception|1|1|Get {} ships to surrender|5/10/20|Ships surrender 10% more readily; contraband scans 10% weaker;20% more readily; scans 20% weaker;30% more readily; scans 30% weaker;50% more readily; scans 50% weaker
+dip|Diplomacy|1|1|Pacify {} different people|5/25/50|Talk a person at or below your level out of fighting;Pacify people up to 10 levels above you;Pacify people up to 20 levels above you;Pacified people stay calm for much longer
+inm|Intimidation|1|1|Intimidate {} different people|5/25/50|Make a person at or below your level flee;Up to 10 levels above you;Up to 20 levels above you;Intimidated people flee for much longer
+iso|Isolation|1|1|Kill {} enemies with no companion|20/50/100|With no companion: +15% damage, +30 damage resistance;+20% damage, +40 damage resistance;+25% damage, +50 damage resistance;+30% damage, +60 damage resistance
+neg|Negotiation|1|1|Bribe your way through {} persuasions|3/5/10|Bribes appear as a persuasion option;Bribes cost 25% less;Bribes cost 50% less;Bribes are occasionally free
+ins|Instigation|1|2|Instigate {} different people|5/25/50|Turn a person below your level against their allies;Up to 10 levels above you;Up to 20 levels above you;Instigated people fight until they die
+lea|Leadership|1|2|Sprint {} m with a companion along|1,000/2,500/5,000|Companions grow fond of you 25% faster;Companions get +50 health and +50 kg capacity;Companions occasionally heal you;Doubles companions' combat and physical crew bonuses; they may get back up when downed
+opm|Outpost Management|1|2|Have cargo links on 6 planets~Build 8 outpost robots~Build 10 outpost crew stations||More cargo links per outpost;More robots per outpost;More crew per outpost;Outpost extractors work twice as fast
+man|Manipulation|1|3|Manipulate {} different people|5/25/50|Command a person at or below your level;Up to 10 levels above you;Up to 20 levels above you;Manipulated people obey for much longer
+shc|Ship Command|1|3|Destroy 5 ships with 2 or more crew aboard~Destroy 25 ships with 4 or more crew aboard~Destroy 50 ships with 6 or more crew aboard||Up to 4 active crew on your ship;Up to 5 active crew;Up to 6 active crew;Up to 8 active crew
+xen|Xenosociology|1|3|Pacify 15 different alien creatures~Make 15 different aliens flee~Turn 15 different aliens on their allies||Calm an alien up to 10 levels above you;Make an alien flee;Turn an alien on its allies;Command an alien up to 10 levels above you
+bal|Ballistics|2|0|Kill {} enemies with ballistic weapons|20/50/100|+10% ballistic damage;+20% ballistic damage;+30% ballistic damage;+30% ballistic range
+due|Dueling|2|0|Kill {} enemies with melee weapons|20/50/100|+25% melee damage; 10% less damage taken while wielding a melee weapon;Run faster for 10 seconds after a melee kill;+50% melee damage; 15% less damage taken;Melee kills heal 10% of your health
+las|Lasers|2|0|Kill {} enemies with laser weapons|20/50/100|+10% laser damage;+20% laser damage;+30% laser damage;5% chance to set targets on fire
+pis|Pistol Certification|2|0|Kill {} enemies with pistols|20/50/100|+10% pistol damage;+25% pistol damage;+50% pistol damage;Pistol kills grant +25% critical chance for 5 seconds
+sho|Shotgun Certification|2|0|Kill {} enemies with shotguns|20/50/100|+10% shotgun damage;+20% shotgun damage;+30% shotgun damage;Shotgun kills have a small chance to stun nearby targets
+dem|Demolitions|2|1|Kill {} enemies with explosives|20/50/100|See the grenade arc; +25% blast radius;+25% explosive damage;25% less explosive damage taken;Doubles all earlier bonuses
+hvy|Heavy Weapons Certification|2|1|Kill {} enemies with heavy weapons|20/50/100|+10% heavy weapon damage;+20% heavy weapon damage;+30% heavy weapon damage;+25% physical resistance while aiming a heavy weapon
+inc|Incapacitation|2|1|Deal {} EM damage|400/1,000/2,500|+5% EM weapon damage;+10% EM weapon damage;+15% EM weapon damage;15% chance for EM hits to deal triple damage
+pbm|Particle Beams|2|1|Kill {} enemies with particle beam weapons|20/50/100|+10% particle beam damage;+20% particle beam damage;+30% particle beam damage;+5% particle beam critical chance
+rif|Rifle Certification|2|1|Kill {} enemies with rifles|20/50/100|+10% rifle damage;+20% rifle damage;+30% rifle damage;Reload rifles 30% faster while standing still
+mrk|Marksmanship|2|2|Land {} ranged critical hits|10/30/75|+3% critical chance with non-automatic guns;+8% critical chance;+15% critical chance;Double critical damage without a scope; scoped crits can knock down
+rld|Rapid Reloading|2|2|Reload {} empty magazines|30/75/150|Ballistic weapons reload 30% faster;Energy and EM weapons reload 30% faster;Particle beams reload 30% faster; 50% chance a hit won't interrupt reloading;Hits can speed reloading by 50% for 15 seconds
+snp|Sniper Certification|2|2|Kill {} enemies with scoped weapons|50/125/250|Less sway with scoped weapons;Hold your breath longer when scoped;+25% headshot critical chance while aiming;+50% damage while scoped
+tgt|Targeting|2|2|Kill {} enemies without aiming down sights|50/125/250|Better hip-fire accuracy and range; marks 1 attacker within 25 m;Marks 2 attackers within 50 m;Marks 3 attackers within 75 m;10% chance to disarm with hip fire; marks 4 within 100 m
+arp|Armor Penetration|2|3|Kill {} enemies with non-automatic weapons|20/50/100|Ignore 15% of target armor;Ignore 30% of target armor;Ignore 50% of target armor;Critical hits cut target armor by 25% for 6 seconds
+cri|Crippling|2|3|Put {} enemies into bleedout|20/50/100|Humans go down 30% more readily;Downed humans are 50% less likely to recover;Humans go down sooner;Works on every enemy; +100% damage to downed targets
+shp|Sharpshooting|2|3|Land {} ranged critical hits|50/125/250|+50% ranged headshot critical damage;+50% ranged leg critical damage;+50% critical damage to any body part;Critical kills grant +25% critical chance for 20 seconds
+ast|Astrodynamics|3|0|Make {} grav jumps|5/15/30|+15% grav jump range;15% less grav jump fuel;+30% range and 30% less fuel;50% less grav jump fuel
+geo|Geology|3|0|Mine inorganic resources from {} sources|20/50/100|More common and uncommon inorganics when mining;More rare inorganics;More exotic inorganics;Occasionally yields bonus rare resources
+med|Medicine|3|0|Use healing items while hurt {} times|20/50/100|Healing items restore 10% more, 10% faster;20% more, 20% faster;30% more, 30% faster;50% more, 50% faster; may cure an affliction
+res|Research Methods|3|0|Craft {} unique items|5/10/15|Crafting and research cost 10% less;Cost 20% less;Cost 40% less;Cost 60% less; breakthroughs happen twice as often
+sur|Surveying|3|0|Scan {} unique resources, plants or creatures|10/25/50|Scanner zoom; scan range 20 m;More zoom; range 30 m;More zoom; range 40 m;Most zoom; range 50 m
+bot|Botany|3|1|Harvest from {} plants|20/50/100|More common plant organics; grow crops at outposts;More rare organics; faster plant scans;More exotic organics;Occasionally yields bonus rare resources
+scn|Scanning|3|1|Scan {} planets or moons|5/15/30|Orbit scans find uncommon inorganics; basic ship info;Rare inorganics; more ship info;Exotic inorganics; ship combat info;Unique inorganics; full cargo list of scanned ships
+ssd|Spacesuit Design|3|1|Craft {} spacesuit, helmet or pack mods|5/15/30|Improved suit and pack mods at the Research Lab;Superior mods;Cutting-edge mods;Suit crafting is occasionally free
+wen|Weapon Engineering|3|1|Craft {} weapon mods|5/15/30|Improved mods at the Weapon Workbench;Superior weapon mods;Cutting-edge weapon mods;Master-tier weapon mods
+zoo|Zoology|3|1|Harvest from {} creatures|20/50/100|More common creature organics; harvest without harming; farm animals at outposts;More uncommon organics; faster creature scans;More rare organics;Occasionally yields bonus rare resources
+aph|Astrophysics|3|2|Scan {} unique planets or moons|10/25/50|Scan moons of the current planet; 10% chance to find planet traits;Scan anything in the system; 20%;Scan systems within 16 light years; 30%;Scan within 30 light years; 50%
+che|Chemistry|3|2|Craft {} chems|10/25/50|Improved chems at the Research Lab;Superior chems;Cutting-edge chems;Crafting chems occasionally makes three
+ope|Outpost Engineering|3|2|Build {} different outpost modules|5/25/50|Improved outpost modules at the Research Lab;Superior modules;Cutting-edge modules;Outpost modules cost 50% fewer resources
+anf|Aneutronic Fusion|3|3|Destroy {} ships|5/25/50|Ship reactors give +1 power;+2 reactor power;+3 reactor power;+5 reactor power
+pla|Planetary Habitation|3|3|Build habitable outposts on {} different planets|5/10/20|Outposts on extreme-temperature worlds; +4 outpost limit;Extreme-pressure worlds; +8 limit;Toxic and corrosive worlds; +12 limit;Extreme-gravity worlds; +16 limit
+spp|Special Projects|3|3|Craft 10 common or uncommon components~Craft 10 rare components~Craft 10 exotic components||Experimental projects at the Research Lab;Rare components at the Industrial Workbench;Exotic components;Unique components; extractors may yield bonus resources
+bws|Ballistic Weapon Systems|4|0|Deal {} ballistic damage to ships|1,000/4,000/10,000|Ship ballistics +10% damage; targeting costs 20% less;+20% damage; 15% faster recharge;+30% damage; 30% faster recharge;+50% damage to ship systems
+bpt|Boost Pack Training|4|0|Boost jump in combat {} times|10/25/50|You can use boost packs;Boost packs use less fuel;Boost fuel refills faster;Doubles both bonuses
+pil|Piloting|4|0|Destroy {} ships|5/15/30|Use ship thrusters;Better turning and handling;Pilot class B ships;Pilot class C ships
+sec|Security|4|0|Pick {} locks|5/15/30|Pick advanced locks; bank 2 attempts;Expert locks; bank 3; hints for each ring;Master locks; bank 4;Digipicks auto-remove unneeded keys; bank 5
+tcs|Targeting Control Systems|4|0|Destroy {} ships while in targeting mode|5/15/30|Lock onto ship systems in targeting mode;15% faster lock; targeted ships fire 25% slower;30% faster lock; +10% critical chance on targets;60% faster lock; +20% system damage while targeting
+ews|Energy Weapon Systems|4|1|Deal {} energy damage to ships|1,000/4,000/10,000|Ship energy weapons +10% damage; targeting 15% cheaper;+20% damage; 30% cheaper;+30% damage; 45% cheaper;Energy weapons recharge 30% faster
+eng|Engine Systems|4|1|Boost in ship combat {} times|5/25/50|+10% ship top speed;Longer boosts with a shorter cooldown;+20% ship top speed;Boosting makes enemies break off until you stop
+pay|Payloads|4|1|Grav jump {} times with your hold 75% full|10/25/50|+10% ship cargo capacity;+20% cargo capacity;+30% cargo capacity;+50% cargo capacity
+shs|Shield Systems|4|1|Absorb {} damage with ship shields|150/350/750|+20% ship shield capacity;+40% shield capacity;+80% shield capacity;Shields occasionally block a hit entirely
+mws|Missile Weapon Systems|4|2|Deal {} missile damage to ships|1,000/4,000/10,000|Ship missiles +10% damage; targeting 20% cheaper;+20% damage; 40% cheaper;+30% damage; 60% cheaper;+20% missile range, speed and reload
+pws|Particle Beam Weapon Systems|4|2|Deal {} particle beam damage to ships|1,000/4,000/10,000|Ship particle beams +10% damage; targeting 10% cheaper;+20% damage; 20% cheaper;+30% damage; 30% cheaper;Higher particle beam critical chance
+rob|Robotics|4|2|Destroy {} robots|5/25/50|+10% damage to robots and turrets; make a robot stop fighting;+20% damage; make a robot flee;+30% damage; turn a robot on its allies;Command a robot up to 10 levels above you
+sds|Starship Design|4|2|Install {} unique ship modules|5/15/30|Improved ship modules;Superior ship modules;Cutting-edge ship modules;Experimental ship modules
+aws|Automated Weapon Systems|4|3|Deal {} turret damage to ships|1,000/4,000/10,000|Ship turrets +10% damage; targeting 20% cheaper;+20% damage; 30% cheaper; 20% less damage taken while targeting;+30% damage; 40% cheaper; +20% critical chance on systems;Turrets recharge 40% faster; +20% system damage
+bat|Boost Assault Training|4|3|Deal 200 damage with your boost pack~Knock down 20 enemies with your boost pack~Deal 500 damage with your boost pack||Boosting burns and may ignite nearby enemies;Boosting can knock down nearby enemies;Aim while boosting to hover;Time slows by 70% while you hover
+ems|EM Weapon Systems|4|3|Deal {} EM damage to ships|1,000/4,000/10,000|Ship EM weapons +10% damage; targeting 15% cheaper;+20% damage; 30% cheaper;+30% damage; 45% cheaper;Small chance to disable an enemy's engines outright
+sen|Starship Engineering|4|3|Use {} ship repair kits|5/10/15|Ship systems repair 10% faster;Ship systems take 25% less damage;Ship systems repair 25% faster;Repairing one system block sometimes repairs them all`;
+const SK=RAW.split('\n').map((l,i)=>{const [k,n,t,ti,tpl,nums,ef]=l.split('|');
+ const c=nums?nums.split('/').map(x=>tpl.replace('{}',x)):tpl.split('~');return {k,n,t:+t,ti:+ti,c,e:ef.split(/;(?! )/),i};});
+const SKN=Object.fromEntries(SK.map(s=>[s.k,s]));
+const BG=[['Beast Hunter',['fit','bal','gas']],['Bouncer',['box','sec','fit']],['Bounty Hunter',['pil','tcs','bpt']],['Chef',['gas','due','sca']],['Combat Medic',['pis','med','wel']],['Cyber Runner',['ste','sec','the']],['Cyberneticist',['med','sec','las']],['Diplomat',['per','com','wel']],['Explorer',['las','ast','sur']],['Gangster',['sho','box','the']],['Homesteader',['geo','sur','wtl']],['Industrialist',['per','sec','res']],['Long Hauler',['wtl','pil','bws']],['Pilgrim',['sca','sur','gas']],['Professor',['ast','geo','res']],['Ronin',['due','ste','sca']],['Sculptor',['med','geo','per']],['Soldier',['fit','bal','bpt']],['Space Scoundrel',['pis','pil','per']],['Xenobiologist',['las','sur','fit']]];
+const BGN=Object.fromEntries(BG.map(b=>[b[0],b[1]]));
+const TR=[["Alien DNA","More health and oxygen","Healing items and food work less well",""],
+["Dream Home","A house of your own on a quiet world","A 125,000 credit mortgage paid weekly",""],
+["Empath","Combat boost when you do things your companion likes","A penalty when you do things they dislike",""],
+["Extrovert","Use less oxygen with human companions","Use more oxygen alone","social"],
+["Introvert","Use less oxygen when alone","Use more oxygen with human companions","social"],
+["Freestar Collective Settler","Extra dialogue and better rewards with the Freestar Collective","Bounties from other factions are higher","faction"],
+["Neon Street Rat","Extra dialogue and better rewards in Neon","Bounties from other factions are higher","faction"],
+["United Colonies Native","Extra dialogue and better rewards with the United Colonies","Bounties from other factions are higher","faction"],
+["Hero Worshipped","An adoring fan joins your crew and brings gifts","He never stops talking",""],
+["Kid Stuff","Your parents are alive and you can visit them","2% of your credits go home every week",""],
+["Raised Enlightened","A chest of goods at the House of the Enlightened","Lose access to the Sanctum Universum chest","faith"],
+["Raised Universal","A chest of goods at the Sanctum Universum","Lose access to the House of the Enlightened chest","faith"],
+["Serpent's Embrace","Health and oxygen boost after each grav jump","Lower health and oxygen if you stop jumping","faith"],
+["Spaced","More health and oxygen in space","Less health and oxygen on a planet's surface","where"],
+["Terra Firma","More health and oxygen on a planet's surface","Less health and oxygen in space","where"],
+["Taskmaster","Crew-trained ship systems sometimes repair to full below 50%","Crew cost twice as much to hire",""],
+["Wanted","Extra damage while your health is low","Mercenaries come after you now and then",""]];
+const TRN=Object.fromEntries(TR.map(t=>[t[0],t]));
+// Sample builds: seq is a priority queue; each level takes the first entry it can legally take.
+const PR=[
+{name:'Gunslinger',g:'pis',bg:'Combat Medic',traits:['Introvert','Wanted'],blurb:'Pistols, fast reloads and crits. Fights alone and keeps a med pack close.',
+ seq:'pil bpt bal pis bal sec ste pis wel fit pis bal pai rld mrk wel rld tgt mrk arp shp mrk arp shp rld shp arp mrk shp arp med med tcs shs rld wel ste pai bal'},
+{name:'Ghost sniper',g:'snp',bg:'Cyber Runner',traits:['Introvert',"Serpent's Embrace"],blurb:'Long rifles from the shadows. Stays hidden, lines up the shot, makes it count.',
+ seq:'bal bal las rif ste ste wel rif bal rif snp mrk snp ste fit pai env gym wel snp mrk arp shp shp nut con snp con mrk shp arp con rif sec sec pai con shp arp'},
+{name:'Brawler',g:'box',bg:'Bouncer',traits:['Alien DNA','Terra Firma'],blurb:'Fists first. High health, stuns and knockdowns, and shrugging off hits.',
+ seq:'wel box wtl box pai box nut wel pai mar env cel box mar wel pai neu rej neu mar neu rej neu rej mar rej due due due ewd ewd cel dec wel pai fit fit fit wtl ste ste nut gym gym'},
+{name:'Silver tongue',g:'per',bg:'Diplomat',traits:['Extrovert','Hero Worshipped'],blurb:'Talks through most fights, gets the best prices, and lets the crew do the shooting.',
+ seq:'per per dip inm neg per lea com ins dip lea man inm lea ins man dip man com lea iso pis pis neg the the shc shc xen pis com bal bal sca sca bal xen man shc'},
+{name:'Ship captain',g:'pil',bg:'Long Hauler',traits:['Spaced','Taskmaster'],blurb:'Lives in the pilot seat. Bigger ships, harder hitting guns, tougher shields.',
+ seq:'pil tcs bws pil shs ews eng bws shs pil tcs mws sds pws sds shs aws sen aws sen eng tcs bws aws sds sen pil ews shs aws sen mws mws ast ast per com pay pay rob rob wtl'},
+{name:'Outpost tycoon',g:'ope',bg:'Professor',traits:['Dream Home','Kid Stuff'],blurb:'Mines, builds and crafts. Outposts on hostile worlds and a lab full of upgrades.',
+ seq:'geo sur res geo bot zoo scn ope res che ope geo pla spp ope pla spp sur sur bot zoo pla spp ope pla che che wen ssd ssd wen geo res res bot bot zoo sur med med scn scn aph aph ast'}];
+document.body.insertAdjacentHTML('afterbegin','<svg width="0" height="0" style="position:absolute" aria-hidden="true">'+Object.entries(G).map(([k,v])=>`<symbol id="g-${k}" viewBox="0 0 24 24">${v}</symbol>`).join('')+'</svg>');
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ic=g=>`<svg class="ic" aria-hidden="true"><use href="#g-${g}"/></svg>`;
+const med=(k,sz='')=>`<span class="med t${SKN[k].t} ${sz}">${ic(k)}</span>`;
+const pips=(have,nx)=>'<span class="pips">'+[1,2,3,4].map(i=>`<i class="${i<=have?'on':(nx&&i===have+1?'nx':'')}"></i>`).join('')+'</span>';
+const CAPS=[20,30,40,50,60,80,100,150];
+const KEY='lodestar-planner-v1';
+let S,hist=[];
+
+function blank(){return {name:'New explorer',bg:'Soldier',traits:[],cap:40,lv:{},view:1,sel:2,tab:2,auto:true};}
+function ranks(lv,incl){const r={};(BGN[S.bg]||[]).forEach(k=>r[k]=1);
+ for(let i=2;i<=Math.min(lv,S.cap);i++){if(i===lv&&!incl)break;const k=S.lv[i];if(k&&SKN[k])r[k]=(r[k]||0)+1;}return r;}
+function treePts(r){const t=[0,0,0,0,0];for(const k in r)t[SKN[k].t]+=r[k];return t;}
+function why(lv,k){const r=ranks(lv,false),s=SKN[k],cur=r[k]||0;
+ if(cur>=4)return `${s.n} is already at rank 4`;
+ const tp=treePts(r)[s.t];if(tp<NEED[s.ti])return `${TIERS[s.ti]} ${TREES[s.t]} skills need ${NEED[s.ti]} ${TREES[s.t]} points, you have ${tp}`;
+ return '';}
+function issue(lv){const k=S.lv[lv];return k?why(lv,k):'';}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
+function commit(fn){hist.push(JSON.stringify(S));if(hist.length>80)hist.shift();fn();save();render();}
+function traitBlock(n,list){const t=TRN[n];if(!t)return '';const g=t[3];if(!g)return '';const o=list.find(x=>x!==n&&TRN[x]&&TRN[x][3]===g);return o?`Can't combine with ${o}`:'';}
+function clean(o){
+ const b=blank();if(!o||typeof o!=='object')return b;
+ const n=x=>Number.isFinite(+x)?Math.round(+x):0;
+ b.name=typeof o.name==='string'?o.name.slice(0,60):b.name;
+ b.bg=BGN[o.bg]?o.bg:b.bg;
+ if(Array.isArray(o.traits))o.traits.forEach(t=>{if(TRN[t]&&b.traits.length<3&&!b.traits.includes(t)&&!traitBlock(t,b.traits))b.traits.push(t);});
+ b.cap=CAPS.includes(n(o.cap))?n(o.cap):40;
+ if(o.lv&&typeof o.lv==='object')for(const k in o.lv){const lv=n(k);if(lv>=2&&lv<=150&&SKN[o.lv[k]])b.lv[lv]=o.lv[k];}
+ b.view=Math.max(1,Math.min(b.cap,n(o.view)||1));b.sel=Math.max(2,Math.min(b.cap,n(o.sel)||2));
+ b.tab=Math.max(0,Math.min(4,n(o.tab)));b.auto=o.auto!==false;
+ return b;}
+function fromPreset(pr){
+ S=blank();Object.assign(S,{name:pr.name,bg:pr.bg,traits:pr.traits.slice(),cap:40,view:16,sel:2});
+ const q=pr.seq.split(/\s+/).filter(k=>SKN[k]);
+ for(let lv=2;lv<=S.cap;lv++){const i=q.findIndex(k=>!why(lv,k));if(i<0)break;S.lv[lv]=q[i];q.splice(i,1);}
+ S.tab=SKN[S.lv[2]]?SKN[S.lv[2]].t:0;return S;}
+try{const raw=localStorage.getItem(KEY);S=raw?clean(JSON.parse(raw)):fromPreset(PR[0]);}catch(e){S=fromPreset(PR[0]);}
+
+function rPresets(){
+ $('presets').innerHTML=PR.map((p,i)=>`<div class="pc" aria-current="${S.name===p.name}"><span class="med big t${SKN[p.g].t}">${ic(p.g)}</span><h3>${esc(p.name)}</h3><p>${esc(p.blurb)}</p><div><p class="meta">${esc(p.bg)} · ${p.traits.map(esc).join(', ')}</p><button id="pr${i}" data-a="preset" data-i="${i}" style="margin-top:8px;width:100%">Load this build</button></div></div>`).join('');}
+function rBg(){
+ $('bgs').innerHTML=BG.map(([n,ks],i)=>`<button class="bgb" id="bg${i}" data-a="bg" data-n="${esc(n)}" aria-pressed="${S.bg===n}"><span>${esc(n)}</span><span class="ics" aria-hidden="true">${ks.map(k=>med(k,'sm')).join('')}</span></button>`).join('');
+ const ks=BGN[S.bg];
+ $('bgcard').innerHTML=`<div class="pan bgcard"><strong style="grid-column:1/-1">${esc(S.bg)} starts with</strong>${ks.map(k=>`${med(k)}<span>${esc(SKN[k].n)} <span class="mut">· ${TREES[SKN[k].t]}</span><br><span class="mut">${esc(SKN[k].e[0])}</span></span>`).join('')}</div>`;}
+function rTraits(){
+ $('tcount').textContent=`${S.traits.length} of 3`;
+ $('traits').innerHTML=TR.map((t,i)=>{const on=S.traits.includes(t[0]),blk=traitBlock(t[0],S.traits),off=!on&&(S.traits.length>=3||!!blk);
+  return `<label class="trait${off?' off':''}"><input type="checkbox" id="tr${i}" data-a="tr" data-n="${esc(t[0])}" ${on?'checked':''} ${off?'disabled':''}><span>${esc(t[0])}</span><small><b>+</b> ${esc(t[1])}. <b>−</b> ${esc(t[2])}.${!on&&blk?' <em>'+esc(blk)+'.</em>':''}</small></label>`;}).join('');}
+function rSnap(){
+ const v=Math.min(S.view,S.cap),r=ranks(v,true),tp=treePts(r);
+ $('view').max=S.cap;$('view').value=v;$('viewn').textContent=v;$('snapname').textContent=S.name||'Snapshot';
+ const sc=Math.max(16,...tp);
+ $('gauges').innerHTML=TREES.map((n,t)=>{const open=NEED.filter(x=>tp[t]>=x).length-1;
+  return `<div class="gauge t${t}"><span>${n}</span><span class="t" role="img" aria-label="${n}: ${tp[t]} points"><i style="width:${tp[t]/sc*100}%"></i>${[4,8,12].map(x=>`<b style="left:${x/sc*100}%"></b>`).join('')}</span><span class="n">${tp[t]}</span><small>${open>=3?'All tiers open':`${TIERS[open]} open · ${NEED[open+1]-tp[t]} more for ${TIERS[open+1]}`}</small></div>`;}).join('');
+ const ks=Object.keys(r),max4=ks.filter(k=>r[k]>=4).length,pts=ks.reduce((a,k)=>a+r[k],0);
+ const later=[];for(let i=v+1;i<=S.cap;i++)if(S.lv[i])later.push(i);
+ $('figs').innerHTML=[[pts,'Points spent'],[ks.length,'Skills known'],[max4,'At rank 4'],[S.cap-v,'Levels to go']].map(f=>`<div class="fig"><span class="num">${f[0]}</span><small>${f[1]}</small></div>`).join('');
+ $('learned').innerHTML=SK.filter(s=>r[s.k]).map(s=>`<span>${med(s.k,'sm')}${esc(s.n)} <span class="t${s.t}">${pips(r[s.k])}</span></span>`).join('')||'<span class="mut">Nothing yet.</span>';
+ // next challenge for each skill whose next rank is planned after the snapshot level
+ const seen={},rows=[],run=Object.assign({},r);
+ for(let i=v+1;i<=S.cap;i++){const k=S.lv[i];if(!k||!SKN[k])continue;const cur=run[k]||0;run[k]=cur+1;if(seen[k])continue;seen[k]=1;
+  if(cur>=1&&cur<4)rows.push(`<li>${med(k,'sm')}<span><strong>${esc(SKN[k].n)} rank ${cur+1}</strong> at level ${i}: ${esc(SKN[k].c[cur-1])}</span></li>`);}
+ $('chal').innerHTML=rows.slice(0,8).join('')||'<li class="mut" style="display:block">No rank-ups planned after this level.</li>';}
+function rLevels(){
+ const rows=[`<div class="lrow one pan" role="listitem" style="background:var(--bg)"><span class="num">1</span><span class="pk">${BGN[S.bg].map(k=>med(k,'sm')).join('')}<span>${esc(S.bg)}</span></span><span class="st mut">background</span></div>`];
+ const run=ranks(1,true);
+ for(let lv=2;lv<=S.cap;lv++){const k=S.lv[lv],is=issue(lv);let pk,st;
+  if(k){run[k]=(run[k]||0)+1;pk=`${med(k,'sm')}<span>${esc(SKN[k].n)} <span class="mut">${run[k]}</span></span>`;st=is?'<span class="flag">check</span>':'<span class="ok" aria-label="fine">✓</span>';}
+  else{pk='<span class="mut">point open</span>';st='';}
+  rows.push(`<button class="lrow" role="listitem" id="lv${lv}" data-a="sel" data-l="${lv}" aria-current="${S.sel===lv}"><span class="num">${lv}</span><span class="pk">${pk}</span><span class="st">${st}</span></button>`);}
+ $('levels').innerHTML=rows.join('');}
+function rEditor(){
+ const lv=S.sel,k=S.lv[lv],r=ranks(lv,false),tp=treePts(r),is=issue(lv);
+ let h=`<div class="edhead"><h2>Level <span class="num">${lv}</span></h2><span class="mut">${k?'1 point spent':'1 point to spend'}</span></div>`;
+ if(k){const s=SKN[k],nr=(r[k]||0)+1,rr=Math.min(nr,4);
+  h+=`<div class="pcard">${med(k,'big')}<div><p><strong>${esc(s.n)}</strong> <span class="mut">rank ${nr} · ${TIERS[s.ti]} ${TREES[s.t]}</span></p><p>${esc(s.e[rr-1])}</p>${is?`<p class="why"><span class="flag">check</span> ${esc(is)}</p>`:''}${nr>=2&&nr<=4?`<p class="req">Before this point: ${esc(s.c[nr-2])}.</p>`:''}</div></div>`;}
+ h+=`<div class="tabs" role="group" aria-label="Skill tree">${TREES.map((n,t)=>`<button class="tab t${t}" id="tab${t}" data-a="tab" data-t="${t}" aria-pressed="${S.tab===t}"><span class="med sm t${t}">${ic(['wel','per','bal','geo','pil'][t])}</span>${n} <span>${tp[t]}</span></button>`).join('')}</div>`;
+ const t=S.tab;
+ for(let ti=0;ti<4;ti++){const open=tp[t]>=NEED[ti];
+  h+=`<div class="tier"><strong>${TIERS[ti]}</strong><span class="mut">${ti===0?'Always open':open?`Open (${NEED[ti]} points)`:`Needs ${NEED[ti]} ${TREES[t]} points, ${NEED[ti]-tp[t]} to go`}</span></div><div class="skg">`;
+  h+=SK.filter(s=>s.t===t&&s.ti===ti).map(s=>{const cur=r[s.k]||0,w=why(lv,s.k),on=k===s.k;
+   return `<button class="sk" id="sk${s.k}" data-a="pick" data-k="${s.k}" aria-pressed="${on}" ${w&&!on?'disabled':''} title="${esc(w||s.e[Math.min(cur,3)])}">${med(s.k)}<span>${esc(s.n)}</span><span class="t${s.t}">${pips(cur,!w)}</span></button>`;}).join('');
+  h+='</div>';}
+ h+=`<div class="row"><button id="clr" data-a="clr" ${k?'':'disabled'}>Clear this level</button><button id="nxt" data-a="nxt" ${lv>=S.cap?'disabled':''}>Next level</button><label class="ck" style="flex:0 1 auto;font-weight:400"><input type="checkbox" id="auto" ${S.auto?'checked':''}> Go to the next level after picking</label></div>`;
+ $('editor').innerHTML=h;}
+function rIndex(){
+ const q=$('q').value.trim().toLowerCase(),tf=$('tf').value,mine=$('mine').checked,r=ranks(S.cap,true);
+ const rows=SK.filter(s=>(tf===''||s.t===+tf)&&(!mine||r[s.k])&&(!q||(s.n+' '+s.e.join(' ')+' '+s.c.join(' ')).toLowerCase().includes(q)));
+ $('idx').innerHTML=rows.length?rows.map(s=>`<tr class="${r[s.k]?'have':''}"><td><div class="pnw">${med(s.k)}<span>${esc(s.n)}${r[s.k]?` <span class="t${s.t}">${pips(r[s.k])}</span>`:''}</span></div></td><td class="tt">${TREES[s.t]}<br><span class="mut">${TIERS[s.ti]}${s.ti?' · '+NEED[s.ti]+' pts':''}</span></td><td><ol>${s.e.map(e=>`<li>${esc(e)}</li>`).join('')}</ol></td><td><ol start="2">${s.c.map(c=>`<li>${esc(c)}</li>`).join('')}</ol></td></tr>`).join(''):'<tr><td colspan="4" class="mut">No skills match.</td></tr>';}
+function render(){
+ const f=document.activeElement&&document.activeElement.id;
+ $('bname').value=S.name;$('cap').value=S.cap;$('undo').disabled=!hist.length;
+ rPresets();rBg();rTraits();rSnap();rLevels();rEditor();rIndex();
+ if(f&&$(f)&&$(f)!==document.activeElement&&!$(f).disabled)$(f).focus({preventScroll:true});}
+
+$('cap').innerHTML=CAPS.map(c=>`<option value="${c}">${c}</option>`).join('');
+$('tf').innerHTML+=TREES.map((n,i)=>`<option value="${i}">${n}</option>`).join('');
+document.addEventListener('click',e=>{
+ const b=e.target.closest('[data-a]');if(!b||b.tagName==='INPUT')return;const a=b.dataset.a;
+ if(a==='preset'){commit(()=>fromPreset(PR[+b.dataset.i]));$('creation').scrollIntoView({behavior:'smooth',block:'start'});}
+ else if(a==='bg')commit(()=>{S.bg=b.dataset.n;});
+ else if(a==='sel'){S.sel=+b.dataset.l;S.view=S.sel;const k=S.lv[S.sel];if(k)S.tab=SKN[k].t;save();render();}
+ else if(a==='tab'){S.tab=+b.dataset.t;save();rEditor();$('tab'+S.tab).focus();}
+ else if(a==='pick'){const k=b.dataset.k;commit(()=>{S.lv[S.sel]=k;if(S.auto&&S.sel<S.cap){S.sel++;S.view=S.sel;}});
+  if(S.auto){const el=$('lv'+S.sel);el&&el.scrollIntoView({block:'nearest'});const nb=$('sk'+k);if(nb&&!nb.disabled)nb.focus({preventScroll:true});}}
+ else if(a==='clr')commit(()=>{delete S.lv[S.sel];});
+ else if(a==='nxt'){S.sel=Math.min(S.cap,S.sel+1);S.view=S.sel;save();render();const el=$('lv'+S.sel);el&&el.scrollIntoView({block:'nearest'});}
+});
+document.addEventListener('change',e=>{const t=e.target;
+ if(t.dataset.a==='tr')commit(()=>{const n=t.dataset.n;S.traits=t.checked?[...S.traits,n].slice(0,3):S.traits.filter(x=>x!==n);});
+ else if(t.id==='cap')commit(()=>{S.cap=+t.value;S.view=Math.min(S.view,S.cap);S.sel=Math.min(S.sel,S.cap);});
+ else if(t.id==='auto'){S.auto=t.checked;save();}
+ else if(t.id==='mine'||t.id==='tf')rIndex();});
+$('bname').addEventListener('input',e=>{S.name=e.target.value.slice(0,60);$('snapname').textContent=S.name||'Snapshot';save();});
+$('view').addEventListener('input',e=>{S.view=+e.target.value;save();rSnap();});
+$('q').addEventListener('input',rIndex);
+$('undo').addEventListener('click',()=>{if(!hist.length)return;S=JSON.parse(hist.pop());save();render();});
+$('reset').addEventListener('click',()=>commit(()=>{const keep=S.bg;S=blank();S.bg=keep;}));
+$('copy').addEventListener('click',async()=>{
+ const o={name:S.name,bg:S.bg,traits:S.traits,cap:S.cap,lv:S.lv};
+ const code=btoa(unescape(encodeURIComponent(JSON.stringify(o))));$('io').open=true;$('code').value=code;
+ try{await navigator.clipboard.writeText(code);$('iomsg').textContent='Copied. Paste it here later to load this build.';}
+ catch(err){$('iomsg').textContent='Select the code above and copy it.';$('code').select();}});
+$('load').addEventListener('click',()=>{
+ try{const o=JSON.parse(decodeURIComponent(escape(atob($('code').value.trim()))));commit(()=>{S=clean(o);});$('iomsg').textContent='Loaded.';}
+ catch(err){$('iomsg').textContent='That code could not be read.';}});
+render();
+</script>
+</body></html>
